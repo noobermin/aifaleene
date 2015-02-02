@@ -56,19 +56,18 @@ line_error(const char *line, int pos,
 	   const char* fmt,...)
 {
   va_list vl;
-  int i;
   va_start(vl,fmt);
   vprintf(fmt,vl);
   va_end(vl);
   printf("\n%s\n",line);
   if (pos < 0) return 0;
   
-  for(i=0; i<pos; ++i) printf(" ");
-  printf("^\n");
+  for(int i=0; i<pos; ++i) putchar(' ');
+  puts("^");
   return 0;
 }
 
-const char *pref_op_strs[] = {"-"};
+const char *pref_op_strs[] = {"-","!",""};
 
 const char *op_strs[] =
   /*              v--deliberate hack to keep this working with my scanner*/
@@ -137,7 +136,7 @@ isop(int in)
 }
 
 static
-ispref(int in) { return in == '-'; }
+ispref(int in) { return in=='-' || in=='!';}
 
 /*static
 isident(int in)
@@ -225,7 +224,11 @@ prefix_operate(value *r, prefix_op_type pre) {
   switch(pre)
     {
     case NEG_PREF:
-      set_valuep(r, - get_valuep(r));
+      set_valuep(r, -get_valuep(r));
+      break;
+    case LNOT_PREF:
+      set_valuep(r, !get_valuep(r));
+      r->type=BOOL_VALUE;
       break;
     default:
       return -1;

@@ -44,6 +44,7 @@ typedef enum _op_type{
 
 typedef enum _prefix_op_type{
   NEG_PREF=0,
+  LNOT_PREF,
   INVALID_PREF
 }prefix_op_type;
 

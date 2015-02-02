@@ -242,72 +242,71 @@ prefix_operate(value *r, prefix_op_type pre) {
 operate(value l, value r, op_type op, value *ret) {
   /*handle promotion*/
   ret->type = max(l.type,r.type);
-  switch(op)
-    {
-    case ADD_OP:
-      set_valuep(ret, get_value(l) + get_value(r));
-      break;
-    case SUB_OP:
-      set_valuep(ret, get_value(l) - get_value(r));
-      break;
-    case MUL_OP:
-      set_valuep(ret, get_value(l) * get_value(r));
-      break;
-    case POW_OP:
-      set_valuep(ret, pow(get_value(l), get_value(r)));
-      break;		 
-    case IDIV_OP:
-      /*casting first*/
-      l.uinteger = (unsigned long) get_value(l);
-      r.uinteger = (unsigned long) get_value(r); 
-      ret->type = l.type = r.type = UINTEGER_VALUE; /*intentional fall through*/
-    case DIV_OP:
-      if (get_value(r) == zero(r))
-	return DIVBYZERO_ERROR;
-      set_valuep(ret, get_value(l) / get_value(r));
-      break;
-    case MOD_OP:
-      l.uinteger = (unsigned long) get_value(l);
-      r.uinteger = (unsigned long) get_value(r);
-      ret->type = l.type = r.type = UINTEGER_VALUE;
-      if (get_value(r) == zero(r))
-	return DIVBYZERO_ERROR;
-      set_valuep(ret, l.uinteger % r.uinteger);
-      break;
-    case EQ_OP:
-      ret->type = BOOL_VALUE;
-      set_valuep(ret, get_value(l) == get_value(r));
-      break;
-    case NOT_EQ_OP:
-      ret->type = BOOL_VALUE;
-      set_valuep(ret, get_value(l) != get_value(r));
-      break;
-    case GREAT_OP:
-      ret->type = BOOL_VALUE;
-      set_valuep(ret, get_value(l) > get_value(r));
-      break;
-    case LESS_OP:
-      ret->type = BOOL_VALUE;
-      set_valuep(ret, get_value(l) < get_value(r));
-      break;
-    case GR_EQ_OP:
-      ret->type = BOOL_VALUE;
-      set_valuep(ret, get_value(l) >= get_value(r));
-      break;
-    case LS_EQ_OP:
-      ret->type = BOOL_VALUE;
-      set_valuep(ret, get_value(l) <= get_value(r));
-      break;
-    case LAND_OP:
-      ret->type = BOOL_VALUE;
-      set_valuep(ret, get_value(l) && get_value(r));
-      break;
-    case LOR_OP:
-      ret->type = BOOL_VALUE;
-      set_valuep(ret, get_value(l) || get_value(r));
-      break;
-    default: break;
-    }
+  switch(op) {
+  case ADD_OP:
+    set_valuep(ret, get_value(l) + get_value(r));
+    break;
+  case SUB_OP:
+    set_valuep(ret, get_value(l) - get_value(r));
+    break;
+  case MUL_OP:
+    set_valuep(ret, get_value(l) * get_value(r));
+    break;
+  case POW_OP:
+    set_valuep(ret, pow(get_value(l), get_value(r)));
+    break;
+  case IDIV_OP:
+    /*casting first*/
+    l.uinteger = (unsigned long) get_value(l);
+    r.uinteger = (unsigned long) get_value(r);
+    ret->type = l.type = r.type = UINTEGER_VALUE; /*intentional fall through*/
+  case DIV_OP:
+    if (get_value(r) == zero(r))
+      return DIVBYZERO_ERROR;
+    set_valuep(ret, get_value(l) / get_value(r));
+    break;
+  case MOD_OP:
+    l.uinteger = (unsigned long) get_value(l);
+    r.uinteger = (unsigned long) get_value(r);
+    ret->type = l.type = r.type = UINTEGER_VALUE;
+    if (get_value(r) == zero(r))
+      return DIVBYZERO_ERROR;
+    set_valuep(ret, l.uinteger % r.uinteger);
+    break;
+  case EQ_OP:
+    ret->type = BOOL_VALUE;
+    set_valuep(ret, get_value(l) == get_value(r));
+    break;
+  case NOT_EQ_OP:
+    ret->type = BOOL_VALUE;
+    set_valuep(ret, get_value(l) != get_value(r));
+    break;
+  case GREAT_OP:
+    ret->type = BOOL_VALUE;
+    set_valuep(ret, get_value(l) > get_value(r));
+    break;
+  case LESS_OP:
+    ret->type = BOOL_VALUE;
+    set_valuep(ret, get_value(l) < get_value(r));
+    break;
+  case GR_EQ_OP:
+    ret->type = BOOL_VALUE;
+    set_valuep(ret, get_value(l) >= get_value(r));
+    break;
+  case LS_EQ_OP:
+    ret->type = BOOL_VALUE;
+    set_valuep(ret, get_value(l) <= get_value(r));
+    break;
+  case LAND_OP:
+    ret->type = BOOL_VALUE;
+    set_valuep(ret, get_value(l) && get_value(r));
+    break;
+  case LOR_OP:
+    ret->type = BOOL_VALUE;
+    set_valuep(ret, get_value(l) || get_value(r));
+    break;
+  default: break;
+  }
   return 0;
 }
 #undef zero

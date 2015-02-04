@@ -172,7 +172,7 @@ print_value(value v) {
     fmt = "%i";
     break;
   case FLOAT_VALUE:
-    fmt = "%f";
+    fmt = fabs(v.floating) > 1.0e10 ? "%0.4e" : "%0.4f";
     break;
   case BOOL_VALUE:
     fmt = v.uinteger ? "true" : "false";

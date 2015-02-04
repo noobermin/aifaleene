@@ -69,21 +69,22 @@ line_error(const char *line, int pos,
 
 const char *pref_op_strs[] = {"-","!",""};
 
-const char *op_strs[] =
-  /*              v--deliberate hack to keep this working with my scanner*/
-  { "+","-","*","//","/","%","^",
-    "==","!=",">","<",">=","<=",
-    "&&","||",
-    "=",""};
+const char *op_strs[] = {
+/*              v--deliberate hack to keep this working with my scanner*/
+  "+","-","*","//","/","%","^",
+  "==","!=",">","<",">=","<=",
+  "&&","||",
+  "=",""
+};
 
-const int op_prec[] =
-/*  +  -  *  // /  %  ^  == !=  >  <  >=  <=*/
-  { 3, 3, 4, 5, 5, 5, 5, 2, 2,  2, 2, 2,  2,
-/*  && || */
-    1, 1,
-  /* =  */
-    -1,    
-  };
+const int op_prec[] = {
+/* +  -  *  // /  %  ^  == !=  >  <  >=  <=*/
+   3, 3, 4, 5, 5, 5, 5, 2, 2,  2, 2, 2,  2,
+/* && || */
+   1, 1,
+/* =  */
+  -1   
+};
 
 static
 precedence(token tok)
@@ -98,25 +99,25 @@ const char *open_strs[] = {"(","{","["};
 
 const char *close_strs[] = {")","}","]"};
 
-const char *token_strs[] =
-  {"value",
-   "identifier",
-   "operator",
-   "prefix operator",
-   "opening parentheical",
-   "closing parentheical",
-   "end of line",
-   "invalid"
-  };
+const char *token_strs[] = {
+  "value",
+  "identifier",
+  "operator",
+  "prefix operator",
+  "opening parentheical",
+  "closing parentheical",
+  "end of line",
+  "invalid"
+};
 
-const char *error_names[] =
-  {"General Error",
-   "Memory Error",
-   "Syntax Error",
-   "Division By Zero Error",
-   "(Not) Found Error",
-   "Invalid Error...?"
-  };
+const char *error_names[] = {
+  "General Error",
+  "Memory Error",
+  "Syntax Error",
+  "Division By Zero Error",
+  "(Not) Found Error",
+  "Invalid Error...?"
+};
 
 static
 isopendelim(int in)
@@ -127,8 +128,7 @@ isclosedelim(int in)
 { return in == ')' || in == '}' || in == ']'; }
 
 static
-isop(int in)
-{ 
+isop(int in) { 
   return in == '+' || in == '-' || in == '/'
     || in == '*'|| in == '%' || in == '^'
     || in == '=' || in == '>'|| in == '<'  
@@ -147,9 +147,7 @@ isendline(int in)
 { return in == '\0'; }
 
 static token_type
-identify_token(char in, large_mask expected)
-{
-  
+identify_token(char in, large_mask expected) {
   if (isalpha(in) || in=='_')
     return ID_TOKEN;
   else if (isdigit(in))
@@ -166,22 +164,20 @@ identify_token(char in, large_mask expected)
     return INVALID_TOKEN;
 }
 
-print_value(value v)
-{
+print_value(value v) {
   char *fmt;
-  switch(v.type)
-    {
-    case UINTEGER_VALUE:
-    case INTEGER_VALUE:
-      fmt = "%i";
-      break;
-    case FLOAT_VALUE:
-      fmt = "%f";
-      break;
-    case BOOL_VALUE:
-      fmt = v.uinteger ? "true" : "false";
-      break;
-    }  
+  switch(v.type) {
+  case UINTEGER_VALUE:
+  case INTEGER_VALUE:
+    fmt = "%i";
+    break;
+  case FLOAT_VALUE:
+    fmt = "%f";
+    break;
+  case BOOL_VALUE:
+    fmt = v.uinteger ? "true" : "false";
+    break;
+  }  
   return printf(fmt, get_value(v));
 }
 
@@ -496,7 +492,17 @@ aifaleene(char *line, astate* state)
 	    expected |= CLOSE_DELIM_TOKEN;
 	}
       else if (type == ID_TOKEN)
-	{	  
+	{
+	  /*peak at the top, add a multiplication
+	   *if the last token was a value.*/
+	  if (!ibuf_empty(tok_stack)
+	      && ibuf_get(tok_stack).type == VALUE_TOKEN)
+	    token_ibuf_push(&tok_stack,
+	      (token){
+	       .type=OP_TOKEN,
+	       .real_pos=n,
+	       .op = MUL_OP}
+	     );
 	  /*for now, no arguments*/
 	  /*first argument is good*/
 	  int m = n+1,cplen=0;

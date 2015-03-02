@@ -101,14 +101,26 @@ typedef struct _value{
    : val->type == INTEGER_VALUE ? (val->integer=(int_t)(r))	\
    : (val->floating=(flt_t)(r)))
 
+#define INLINETYPES
+#include "buf.h"
+#include "ibuf.h"
+#include "list.h"
+#include "hash.h"
+
 #define ID_LEN 64
 typedef char idname[ID_LEN];
+
+typedef struct _function {
+  idname hashname;
+  gbuf   stack;
+}function;
 
 typedef struct _token{
   token_type type;
   int real_pos;
   union {
     value v;
+    function f;
     idname id;
     op_type op;
     prefix_op_type prefix_op;
@@ -145,11 +157,6 @@ typedef struct _token{
    : tok->type == OPEN_DELIM_TOKEN ? (tok->open = (r))		\
    : (tok->close=(r)))
 
-typedef struct _function
-{
-  int i; //hurr
-}function;
-
 typedef enum {
   VALUE_ID = 0,
   CALL_ID,
@@ -168,12 +175,8 @@ typedef struct _ident
   };
 }ident;
 
-#define INLINETYPES
-#include "buf.h"
-#include "ibuf.h"
-#include "list.h"
-#include "hash.h"
 buf_dec(token);
+gbuf_dec(token);
 ibuf_dec(token);
 list_dec(ident);
 hash_dec(ident);

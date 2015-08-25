@@ -1,7 +1,7 @@
 INCLUDE=-Ich
 WARNINGS=-Wall -Wno-return-type -Wno-implicit-int 
 CFLAGS=-std=c11 $(WARNINGS) -g $(INCLUDE)
-LIBS=-lreadline -lhistory -lm
+LIBS=`echo $(LD_LIBRARY_PATH) | sed "s/^/-L/" | sed "s/:/ -L/g" | sed 's/-L$$//'` -lreadline -lhistory -lm
 
 all: aifaleene
 

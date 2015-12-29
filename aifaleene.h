@@ -11,8 +11,10 @@ typedef enum _token_type{
   PREFIX_OP_TOKEN    = 0x008,
   OPEN_DELIM_TOKEN   = 0x010,
   CLOSE_DELIM_TOKEN  = 0x020,
-  ENDL_TOKEN         = 0x040,
-  INVALID_TOKEN      = 0x080
+  OPEN_QUOTE_TOKEN   = 0x040,
+  CLOSE_QUOTE_TOKEN  = 0x080,
+  ENDL_TOKEN         = 0x100,
+  INVALID_TOKEN      = 0x200
 }token_type;
 
 typedef enum _value_type{
@@ -56,6 +58,7 @@ typedef enum _open_delim_type{
 }open_delim_type;
 
 typedef enum _close_delim_type{
+  LM_DEF_CLOSE,
   PARA_CLOSE,
   SQ_CLOSE,
   CURL_CLOSE,
@@ -88,7 +91,6 @@ typedef struct _value{
    : val->type == INTEGER_VALUE ? val->integer		\
    : val->floating)
 
-
 #define set_value(val, r)					\
   (val.type == UINTEGER_VALUE ? (val.uinteger=(uint_t)(r))	\
    : val.type == BOOL_VALUE ? (val.uinteger = 0 || (r))		\
@@ -102,7 +104,9 @@ typedef struct _value{
    : (val->floating=(flt_t)(r)))
 
 #define ID_LEN 64
+#define LONG_ID_LEN 256
 typedef char idname[ID_LEN];
+typedef char longidname[LONG_ID_LEN];
 
 typedef struct _token{
   token_type type;
@@ -145,29 +149,6 @@ typedef struct _token{
    : tok->type == OPEN_DELIM_TOKEN ? (tok->open = (r))		\
    : (tok->close=(r)))
 
-typedef struct _function
-{
-  int i; //hurr
-}function;
-
-typedef enum {
-  VALUE_ID = 0,
-  CALL_ID,
-  INVALID_ID
-} ident_type;
-
-
-typedef struct _ident
-{
-  ident_type type;
-  idname name;
-  union
-  {
-    value v;
-    function f;
-  };
-}ident;
-
 #define INLINETYPES
 #include "buf.h"
 #include "ibuf.h"
@@ -175,13 +156,37 @@ typedef struct _ident
 #include "hash.h"
 buf_dec(token);
 ibuf_dec(token);
-list_dec(ident);
-hash_dec(ident);
+list_dec(token);
+idname_dec(token);
+
+typedef struct _quote{
+  idname_list scope;
+  idname_list params;
+  token_list tokens;
+} quote;
+
+typedef enum {
+  VALUE_ID = 0,
+  CALL_ID,
+  INVALID_ID
+} var_type;
+
+typedef struct _var {
+  var_type type;
+  idname name;
+  union {
+    value v;
+    quote q;
+  };
+}var;
+hash_dec(var);
 #undef INLINETYPES
 
+/* astate */
 typedef struct _astate{
-  ident_hash_table table;
+  var_hash_table table;
   large_mask flags;
+  idname_list *scope;
 }astate;
 
 typedef enum {

@@ -1,0 +1,10 @@
+digraph {
+    token->{close_delim_type open_delim_type prefix_op_type token_type idname value}
+    value->{value_type}
+    token_list->token
+    idname_list->idname
+    quote->{idname_list token_list}
+    var->{quote value idname var_type}
+    var_hash_table -> var;
+    astate -> {var_hash_table idname_list large_mask}
+}

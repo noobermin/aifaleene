@@ -155,14 +155,14 @@ typedef struct _token{
 #include "list.h"
 #include "hash.h"
 buf_dec(token);
+buf_dec(idname);
 ibuf_dec(token);
-list_dec(token);
-idname_dec(token);
+ibuf_dec(idname);
 
 typedef struct _quote{
-  idname_list scope;
-  idname_list params;
-  token_list tokens;
+  idname_ibuf scope;
+  idname_ibuf params;
+  token_ibuf  tokens;
 } quote;
 
 typedef enum {
@@ -173,12 +173,14 @@ typedef enum {
 
 typedef struct _var {
   var_type type;
-  idname name;
+  longidname name;
   union {
     value v;
     quote q;
   };
 }var;
+
+list_dec(var);
 hash_dec(var);
 #undef INLINETYPES
 

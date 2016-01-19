@@ -5,6 +5,9 @@ LIBS=`echo $(LD_LIBRARY_PATH) | sed "s/^/-L/" | sed "s/:/ -L/g" | sed 's/-L$$//'
 
 all: aifaleene
 
+types.png: types.dot
+	dot -Tpng -o types.png types.dot
+
 aifaleene: main.o
 	$(CC) main.o -o aifaleene $(LIBS)
 
@@ -12,6 +15,6 @@ main.o: main.c ch/hash.h ch/list.h ch/ibuf.h ch/buf.h ch/misc.h aifaleene.h
 	$(CC) $(CFLAGS) -c main.c -o main.o
 
 clean:
-	rm aifaleene *.o
+	rm aifaleene *.o types.png
 
 .Phony: all clean

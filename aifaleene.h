@@ -41,6 +41,7 @@ typedef enum _op_type{
   LAND_OP,
   LOR_OP,
   ASSIGN_OP,
+  SEP_OP,
   INVALID_OP
 }op_type;
 
@@ -121,16 +122,16 @@ typedef struct _token{
   };
 }token;
 
-#define get_token(tok)					\
-  (tok.type == VALUE_TOKEN        ? (tok.v)		\
+#define get_token(tok)                              \
+  (tok.type == VALUE_TOKEN        ? (tok.v)         \
    : tok.type == OP_TOKEN         ? (tok.op)		\
    : tok.type == PREFIX_OP_TOKEN  ? (tok.prefix_op)	\
    : tok.type == OPEN_DELIM_TOKEN ? (tok.open)		\
    : (tok.close))
 
-#define get_tokenp(tok)					\
-  (tok->type == VALUE_TOKEN        ? (tok->v)		\
-   : tok->type == OP_TOKEN         ? (tok->op)		\
+#define get_tokenp(tok)                                 \
+  (tok->type == VALUE_TOKEN        ? (tok->v)           \
+   : tok->type == OP_TOKEN         ? (tok->op)          \
    : tok->type == PREFIX_OP_TOKEN  ? (tok->prefix_op)	\
    : tok->type == OPEN_DELIM_TOKEN ? (tok->open)		\
    : (tok->close))
@@ -154,16 +155,25 @@ typedef struct _token{
 #include "ibuf.h"
 #include "list.h"
 #include "hash.h"
+buf_dec(char);
 buf_dec(token);
 buf_dec(idname);
 ibuf_dec(token);
 ibuf_dec(idname);
 
 typedef struct _quote{
-  idname_ibuf scope;
-  idname_ibuf params;
-  token_ibuf  tokens;
+  char_buf scope;
+  idname_buf params;
+  token_buf tokens;
 } quote;
+static inline
+quote_mk(quote *in){
+  return (char_buf_mk(&in->scope) ||
+          idname_buf_mk(&in->params) ||
+          token_buf_mk(&in->tokens))?
+    MEMORY_ERROR : 0 ;
+}
+
 
 typedef enum {
   VALUE_ID = 0,

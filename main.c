@@ -640,6 +640,7 @@ aifaleene(char *line, astate* state)
 #undef scan_table
     }/*end parsing for-loop*/
   }/*end scope for for-loop*/
+  
   verbose(*state) && dump_stack(&tok_stack, "");
   
   _a(token_ibuf_mk_sz(&aux_stack,tok_stack.sz));

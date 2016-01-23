@@ -34,7 +34,6 @@ typedef struct _gbuf {
     size_t sz;                              \
   }type##_buf;
 
-
 #define buf_dec_proto_arraytype(name)                         \
   BUFPRE int name##_buf_mk(name##_buf*);                      \
   BUFPRE int name##_buf_mk_sz(name##_buf*,size_t);            \
@@ -49,6 +48,7 @@ typedef struct _gbuf {
 #define buf_dec_proto(name)                     \
   buf_dec_proto_arraytype(name);                \
   BUFPRE void name##_buf_setp(name##_buf*, const name*);
+
 
 
 

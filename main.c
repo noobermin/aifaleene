@@ -45,7 +45,6 @@ typedef struct _mem_guard
     goto LABEL; }                          
 #define gotoerr_g(_g, pos, err, vl...) gotoerr_gl(_g,end,pos,err,vl)
 #define gotoerr(pos, err, vl...) gotoerr_g(_g,pos,err,vl)
-
 /*allocation exception wrapper*/
 #define _a_gls(_g,LABEL,errstr,call) {          \
     if (call)                                   \
@@ -329,50 +328,6 @@ operate(value l, value r, op_type op, value *ret) {
 #undef zero
 
 
-/*****************************************************
- * var management
- */
-
-
-static var_list*
-var_list_find(const char* id,var_list* l) {
-  for(;l!=NULL; l=l->next)
-    if ( !strcmp(l->data.name,id) ) break;
-  return l;
-}
-
-var_get(const char* id,
-        var_hash_table table,
-        var** out) {
-  int h = hash(id);
-  var_list *l = table[h];
-  if (!l || !(l=var_list_find(id,l)))
-    return NOTFOUND_ERROR;
-  *out = &l->data;
-  return 0;
-}
-
-var_setdefault(const var* in,
-               var_hash_table table) {
-  int h = hash(in->name);
-  
-  var_list *l;
-  if (table[h]
-      && (l=var_list_find(in->name,table[h])))
-    { l->data = *in; return 0;} 
-  else
-    { return var_list_pushp(table+h,in) ? MEMORY_ERROR : 0; }
-}
-		      
-
-var_add(var* in,
-	       var_hash_table table) {
-  int h = hash(in->name);
-  if (table[h] && var_list_find(in->name,table[h]))
-    return NOTFOUND_ERROR; /*here it is a "found" error*/
-  var_list_pushp(table+h,in);
-  return 0;
-}
 
 value_from_id(const char *id,
 	      var_hash_table table,
@@ -433,125 +388,113 @@ evaluate(astate* state, const token_ibuf* expr, int len,
  end:
   return (*_g.ret);
 }
+/* for parsers */
+#define _mtok(tok) {                         \
+    if (call)                                \
+      goto_err(tok.n, MEMORY_ERROR,          \
+               "Memory Error in Parsing");
+#define push_stackp(p, stack)
+  _mtok(token_ibuf_push(stack,p))
+#define push_stack(p, stack)
+  _mtok(token_ibuf_push(&stack,p))
 
-aifaleene(char *line, astate* state)
-{
-  /*error handling*/
-  mem_guard _g  =
-    (mem_guard){
-    .cur=0, .alloc=0,
-    .lineno=&n, .errstr=errstr,.ret=&ret};
-  /*general stuff*/
-  int n=0,i, len=strlen(line),ret=0, st;
-  /* these are the stacks*/
-  token_ibuf tok_stack, aux_stack, out_stack;
-  /* python, javascript, and lisp have changed me.*/
-#define push_stack(p, stack)                    \
-  _a(token_ibuf_push(&stack,p))
-
-#define push_tok_stack(p) push_stack(p, tok_stack)
-#define push_aux_stack(p) push_stack(p, aux_stack)
-#define push_out_stack(p) push_stack(p, out_stack)
-
-  token res; var tmp;
-  char errstr[max(len+1,64)];
-  /*parsing*/
-  {
-    const large_mask normal_exp =
-      VALUE_TOKEN |
-      ID_TOKEN |
-      OPEN_DELIM_TOKEN |
-      PREFIX_OP_TOKEN |
-      ENDL_TOKEN; 
-    large_mask expected = normal_exp;
-    int pdepth=0, qdepth=0;
-    enum {
-      close_delim_unexpected,
-      val_then_delim,
-      close_delim_expected
-    }close_state = close_delim_unexpected;
-    for(;;){
-      token tok;
-      token_type type;
-      /*skip whitespace*/
-      n+=to_1st(line+n);
-      tok.real_pos=n;
-      tok.type = type = identify_token(*(line+n), expected);
-      /*sorry this has to be here,
-       *basically, if there is a missing open quote,
-       *we just insert one and expect the end of line to
-       *end all quotes*/
-      if ( !(expected & type) &&
-           (expected & OPEN_QUOTE_TOKEN)) {
-        push_token_stack((token){
-            .type=OPEN_QUOTE_TOKEN,.real_pos=n});
-        ++qdepth;
-        expected &= OPEN_QUOTE_TOKEN;
-        expected |= CLOSE_QUOTE_TOKEN;
-        continue;
-      }
-      
-      if (!(expected & type)) {
-        gotoerr(n, SYNTAX_ERROR,
-                "unexpected %s token.",token_strs[binplace(type)]);
-      }
-      /* begin validating tokens */
-      if (type == VALUE_TOKEN) {
+/*parsing*/
+tokenize(char *line, token_ibuf* out, mem_guard _g){
+#define push_out(p) push_stack(p, out)
+  const large_mask normal_exp =
+    VALUE_TOKEN |
+    ID_TOKEN |
+    OPEN_DELIM_TOKEN |
+    PREFIX_OP_TOKEN |
+    ENDL_TOKEN; 
+  large_mask expected = normal_exp;
+  int pdepth=0, qdepth=0, n=0, i;
+  enum {
+    close_delim_unexpected,
+    val_then_delim,
+    close_delim_expected
+  }close_state = close_delim_unexpected;
+  for(;;){
+    token_type type;
+    token tok = null_token;
+    /*skip whitespace*/
+    n+=to_1st(line+n);
+    tok.real_pos=n;
+    type = identify_token(*(line+n), expected);
+    /*sorry this has to be here,
+     *basically, if there is a missing open quote,
+     *we just insert one and expect the end of line to
+     *end all quotes*/
+    if (!(expected & type) &&
+        (expected & OPEN_QUOTE_TOKEN)) {
+      push_token_stack((token){
+          .type=OPEN_QUOTE_TOKEN,.real_pos=n});
+      ++qdepth;
+      expected &= OPEN_QUOTE_TOKEN;
+      expected |= CLOSE_QUOTE_TOKEN;
+      continue;
+    }
+    if (!(expected & type)) {
+      gotoerr(n, SYNTAX_ERROR,
+              "unexpected %s token.",token_strs[binplace(type)]);
+    }
+    _a(token_ch(&tok, type));
+    /* begin validating tokens */
+    if (type == VALUE_TOKEN) {
 #define FLT 37 /*see strol you */
-        char base=FLT;
-        char *end;
-        if ( (*(line+n)) == '0') {
-          char next = *(line+n+1);
-          if (next == 'b') base=2, n+=2;
-          else if (next == 'x') base=0x10, n+=2;
-          else if (next == 'd') base=10, n+=2;
-          else if (next>='1'&& next<='9') base=010, ++n;
-        }
-        if (base==FLT) {
-          tok.v.type = FLOAT_VALUE;
-          tok.v.floating = strtod(line+n, &end);
-        } else if (base==10) {
-          tok.v.type = INTEGER_VALUE;
-          tok.v.integer = strtol(line+n, &end,10);
-        } else {
-          tok.v.type = UINTEGER_VALUE;
-          tok.v.uinteger = strtoul(line+n, &end,base);
-        }
+      char base=FLT;
+      char *end;
+      if ( (*(line+n)) == '0') {
+        char next = *(line+n+1);
+        if (next == 'b') base=2, n+=2;
+        else if (next == 'x') base=0x10, n+=2;
+        else if (next == 'd') base=10, n+=2;
+        else if (next>='1'&& next<='9') base=010, ++n;
+      }
+      if (base==FLT) {
+        tok.v.type = FLOAT_VALUE;
+        tok.v.floating = strtod(line+n, &end);
+      } else if (base==10) {
+        tok.v.type = INTEGER_VALUE;
+        tok.v.integer = strtol(line+n, &end,10);
+      } else {
+        tok.v.type = UINTEGER_VALUE;
+        tok.v.uinteger = strtoul(line+n, &end,base);
+      }
 #undef FLT
-        n=end-line;
-        expected |= ~(VALUE_TOKEN | INVALID_TOKEN | CLOSE_DELIM_TOKEN);
-        expected &= ~(VALUE_TOKEN);
-        if (close_state == val_then_delim)
-          close_state = close_delim_expected;
-        if (close_state == close_delim_expected)
-          expected |= CLOSE_DELIM_TOKEN;
-      } else if (type == ID_TOKEN) {
-        /*peak at the top, add a multiplication
-         *if the last token was a value.*/
-        if (!ibuf_empty(tok_stack)
-            && ibuf_get(tok_stack).type == VALUE_TOKEN)
-          push_tok_stack((token){
-              .type=OP_TOKEN,
-                .real_pos=n,
-                .op = MUL_OP});
-        /*for now, no arguments*/
-        /*first argument is good*/
-        int m = n+1, cplen=0;
-        for(;m < len;++m)
-          if (!(isalpha(line[m]) || isdigit(line[m])|| line[m]=='_'))
-            break;
-        cplen = min(m-n,ID_LEN);
-        memcpy(tok.id, line+n, cplen);
-        cplen+1 < ID_LEN && (tok.id[cplen] = '\0');
-        n=m;
-        expected |= ~(VALUE_TOKEN | ID_TOKEN | INVALID_TOKEN | CLOSE_DELIM_TOKEN);
-        expected &= ~(VALUE_TOKEN | ID_TOKEN );
-        if (close_state == val_then_delim)
-          close_state = close_delim_expected;
-        if (close_state == close_delim_expected)
-          expected |= CLOSE_DELIM_TOKEN;
-      } /*end of ID_TOKEN...we start parsing things
-         *that can be looked up in the tables*/
+      n=end-line;
+      expected |= ~(VALUE_TOKEN | INVALID_TOKEN | CLOSE_DELIM_TOKEN);
+      expected &= ~(VALUE_TOKEN);
+      if (close_state == val_then_delim)
+        close_state = close_delim_expected;
+      if (close_state == close_delim_expected)
+        expected |= CLOSE_DELIM_TOKEN;
+    } else if (type == ID_TOKEN) {
+      /*peak at the top, add a multiplication
+       *if the last token was a value.*/
+      if (!ibuf_empty(tok_stack)
+          && ibuf_get(tok_stack).type == VALUE_TOKEN)
+        push_tok_stack((token){
+            .type=OP_TOKEN, .real_pos=n, .op = MUL_OP});
+      /*for now, no arguments*/
+      /*first argument is good*/
+      int m = n+1, cplen=0;
+      for(;m < len;++m)
+        if (!(isalpha(line[m]) || isdigit(line[m])|| line[m]=='_'))
+          break;
+      cplen = m-n;
+      _mtok(char_buf_resize(&tok.id, m-n+1));
+      char_buf_memcpy(&tok.id, line+n, m-n);
+      char_buf_memcpy_at(&tok.id, m-n, "\0", 1);
+      n=m;
+      expected |= ~(VALUE_TOKEN | ID_TOKEN | INVALID_TOKEN | CLOSE_DELIM_TOKEN);
+      expected &= ~(VALUE_TOKEN | ID_TOKEN );
+      if (close_state == val_then_delim)
+        close_state = close_delim_expected;
+      if (close_state == close_delim_expected)
+        expected |= CLOSE_DELIM_TOKEN;
+    } /*end of ID_TOKEN...we start parsing things
+       *that can be looked up in the tables*/
       
       /*scanning a lookup table, this
        *is a hack in disguise: at the end of string,
@@ -562,126 +505,148 @@ aifaleene(char *line, astate* state)
        *this will obviously break once if I ever add operators with more
        *than two characters.
        */ 
-#define scan_table(table, TYPE)                                     \
-      for (i=0; i != (int)INVALID_##TYPE; ++i)                      \
-        /*we can do this because operators tend to be short ;)*/	\
-        if (*(line+n) == table[i][0])                               \
-          {                                                         \
-            /*if op is only one char long, instant match*/          \
-            if (table[i][1] == '\0')                                \
-              { break; }                                            \
-            else if (*(line+n+1) == table[i][1])                    \
-              { ++n; break;}                                        \
-          }                                                         \
-      ++n;                                                          \
-      if (i==(int)INVALID_##TYPE)                                   \
-        { /* the prescan should have weeded out things*/            \
-          printf("How in the hell did this happen?\n");             \
-          return malloc(0xDEADBEEF*3.14);                           \
-        }							
+#define scan_table(table, TYPE)                                 \
+    for (i=0; i != (int)INVALID_##TYPE; ++i)                    \
+      /*we can do this because operators tend to be short ;)*/	\
+      if (*(line+n) == table[i][0])                             \
+        {                                                       \
+          /*if op is only one char long, instant match*/        \
+          if (table[i][1] == '\0')                              \
+            { break; }                                          \
+          else if (*(line+n+1) == table[i][1])                  \
+            { ++n; break;}                                      \
+        }                                                       \
+    ++n;                                                        \
+    if (i==(int)INVALID_##TYPE)                                 \
+      { /* the prescan should have weeded out things*/          \
+        printf("How in the hell did this happen?\n");           \
+        return malloc(0xDEADBEEF*3.14);                         \
+      }							
       
-      else if (type == OP_TOKEN) {
-        scan_table(op_strs, OP);
-        tok.op = (op_type)i;
-        expected = VALUE_TOKEN | ID_TOKEN
-          | PREFIX_OP_TOKEN | OPEN_DELIM_TOKEN ;
-      } else if (type == PREFIX_OP_TOKEN) {
-        scan_table(pref_op_strs, PREF);
-        tok.prefix_op = (prefix_op_type)i;
-        expected = VALUE_TOKEN | ID_TOKEN
-          | PREFIX_OP_TOKEN | OPEN_DELIM_TOKEN ;
-      } else if (type == OPEN_DELIM_TOKEN) {
-        scan_table(open_strs,OPEN);
-        tok.open = (open_delim_type)i;
-        /*peek top*/
-        if (!ibuf_empty(tok_stack)
-            && ibuf_get(tok_stack).type == VALUE_TOKEN)
-          push_token_stack((token){
-              .type=OP_TOKEN,
-                .real_pos=n,
-                .op = MUL_OP});      
-        close_state = val_then_delim;
-        expected = VALUE_TOKEN |
-          ID_TOKEN | PREFIX_OP_TOKEN | OPEN_DELIM_TOKEN ;
-        ++pdepth;
-      } else if (type == CLOSE_DELIM_TOKEN) {
-        if (!pdepth)
-          gotoerr(n, SYNTAX_ERROR, "unexpected closing delimiter");
-        scan_table(close_strs,CLOSE);
-        tok.close = (close_delim_type)i;
-        if (i == LM_DEF_CLOSE) {
-          /*the open para was really a lambda argument list.*/
-          expected |= OPEN_QUOTE_TOKEN;
-        } else {
-          expected = OP_TOKEN | ENDL_TOKEN;
-          if (--pdepth)
-            expected |= CLOSE_DELIM_TOKEN,
-              close_state = close_delim_expected;
-          else
-            expected &=~CLOSE_DELIM_TOKEN,
-              close_state = close_delim_unexpected;
-        }
-      } else if ( type == OPEN_QUOTE_TOKEN ) {
-        ++qdepth;
-        expected |= VALUE_TOKEN |
-          ID_TOKEN | OPEN_DELIM_TOKEN | PREFIX_OP_TOKEN |
-          ENDL_TOKEN | CLOSE_QUOTE_TOKEN;
-      } else if ( type == CLOSE_QUOTE_TOKEN ) {
-        if (--qdepth)
-          expected &= ~CLOSE_QUOTE_TOKEN;
-      } else if ( type == ENDL_TOKEN ) {
-        if (pdepth)
-          gotoerr(n, SYNTAX_ERROR,"unclosed parentheses");
-        while(qdepth-->0) push_token_stack((token){
-            .type=OPEN_QUOTE_TOKEN,.real_pos=n});
-        break;
-      }
-      push_token_stack(tok);
+    else if (type == OP_TOKEN) {
+    scan_table(op_strs, OP);
+    tok.op = (op_type)i;
+    expected = VALUE_TOKEN | ID_TOKEN
+      | PREFIX_OP_TOKEN | OPEN_DELIM_TOKEN ;
+  } else if (type == PREFIX_OP_TOKEN) {
+    scan_table(pref_op_strs, PREF);
+    tok.prefix_op = (prefix_op_type)i;
+    expected = VALUE_TOKEN | ID_TOKEN
+      | PREFIX_OP_TOKEN | OPEN_DELIM_TOKEN ;
+  } else if (type == OPEN_DELIM_TOKEN) {
+    scan_table(open_strs,OPEN);
+    tok.open = (open_delim_type)i;
+    /*peek top*/
+    if (!ibuf_empty(tok_stack)
+      && ibuf_get(tok_stack).type == VALUE_TOKEN)
+      push_token_stack((token){
+          .type=OP_TOKEN,.real_pos=n,.op = MUL_OP}); 
+    close_state = val_then_delim;
+    expected = VALUE_TOKEN |
+      ID_TOKEN | PREFIX_OP_TOKEN | OPEN_DELIM_TOKEN ;
+    ++pdepth;
+  } else if (type == CLOSE_DELIM_TOKEN) {
+    if (!pdepth)
+      gotoerr(n, SYNTAX_ERROR, "unexpected closing delimiter");
+    scan_table(close_strs,CLOSE);
+    tok.close = (close_delim_type)i;
+    if (i == LM_DEF_CLOSE) {
+      /*the open para was really a lambda argument list.*/
+      /*scan down the out stack until we find the enclosing parentheses*/
+      expected |= OPEN_QUOTE_TOKEN;
+    } else {
+      expected = OP_TOKEN | ENDL_TOKEN;
+      if (--pdepth)
+        expected |= CLOSE_DELIM_TOKEN,
+          close_state = close_delim_expected;
+      else
+        expected &=~CLOSE_DELIM_TOKEN,
+          close_state = close_delim_unexpected;
+    }
+  } else if ( type == OPEN_QUOTE_TOKEN ) {
+    ++qdepth;
+    expected |= VALUE_TOKEN |
+      ID_TOKEN | OPEN_DELIM_TOKEN | PREFIX_OP_TOKEN |
+      ENDL_TOKEN | CLOSE_QUOTE_TOKEN;
+  } else if ( type == CLOSE_QUOTE_TOKEN ) {
+    if (--qdepth)
+      expected &= ~CLOSE_QUOTE_TOKEN;
+  } else if ( type == ENDL_TOKEN ) {
+    if (pdepth)
+      gotoerr(n, SYNTAX_ERROR,"unclosed parentheses");
+    while(qdepth-->0) push_token_stack((token){
+    .type=OPEN_QUOTE_TOKEN,.real_pos=n});
+    break;
+  }
+    push_token_stack(tok);
 #undef scan_table
-    }/*end parsing for-loop*/
-  }/*end scope for for-loop*/
+  }/*end parsing for-loop*/
+ end:
+  return (*_g.ret)
+#undef push_out
+}
+
+
+aifaleene(char *line, astate* state)
+{
+  /*error handling*/
+  mem_guard _g  =
+    (mem_guard){
+    .cur=0, .alloc=0,
+    .lineno=&n, .errstr=errstr,.ret=&ret};
+  /*general stuff*/
+  int i, len=strlen(line),ret=0, st;
+  /* these are the stacks*/
+  token_ibuf tok_stack, aux_stack, out_stack;
+  tok_stack = aux_stack = out_stack = null_stack;
+#define push_aux_stack(p) push_stack(aux_stack, p)
+#define push_out_stack(p) push_stack(out_stack, p)
+  token res; var tmp;
+  char errstr[max(len+1,64)];
+
+  _a(token_ibuf_mk(&tok_stack));
+  
+  if (! tokenize(line, &out_stack, len,  _g) ) goto end;
   
   verbose(*state) && dump_stack(&tok_stack, "");
   
   _a(token_ibuf_mk_sz(&aux_stack,tok_stack.sz));
   _a(token_ibuf_mk_sz(&out_stack,tok_stack.sz));
   /*to rpn*/
-  for(i=0; i<=tok_stack.pos; ++i)
-    {
-      token tok = ibuf_geti(tok_stack,i);
-      switch(tok.type){
-      case ID_TOKEN:
-      case VALUE_TOKEN:
-        token_ibuf_push(&out_stack, tok);  break;
-      case PREFIX_OP_TOKEN:
-      case OP_TOKEN:
-        /*peek top of stack*/
-        if (!ibuf_empty(aux_stack) &&
-            precedence(ibuf_get(aux_stack)) >= precedence(tok))
-          {
-            token_ibuf_push(&out_stack,ibuf_get(aux_stack));
-            ibuf_get(aux_stack) = tok;/*swap*/
-          }
-        else
-          token_ibuf_push(&aux_stack,tok);
-        break;
-      case OPEN_DELIM_TOKEN:
+  for(i=0; i<=tok_stack.pos; ++i) {
+    token tok = ibuf_geti(tok_stack,i);
+    switch(tok.type){
+    case ID_TOKEN:
+    case VALUE_TOKEN:
+      token_ibuf_push(&out_stack, tok); break;
+    case PREFIX_OP_TOKEN:
+    case OP_TOKEN:
+      /*peek top of stack*/
+      if (!ibuf_empty(aux_stack) &&
+          precedence(ibuf_get(aux_stack)) >= precedence(tok)) {
+        token_ibuf_push(&out_stack,ibuf_get(aux_stack));
+        ibuf_get(aux_stack) = tok;/*swap*/
+      } else {
         token_ibuf_push(&aux_stack,tok);
-        break;
-      case CLOSE_DELIM_TOKEN:
-        if (tok.close == LM_DEF_CLOSE){ /*the open para's were a lambda declaration*/
-          
-        } else {
-          while(!ibuf_empty(aux_stack) &&
-                ibuf_get(aux_stack).type != OPEN_DELIM_TOKEN)
-              token_ibuf_push(&out_stack, ibuf_pop(aux_stack));
-        }
-        //assert(ibuf_get(aux_stack).type == OPEN_DELIM_TOKEN);
-        ibuf_pop(aux_stack);
-        break;
-      default: break;
       }
+      break;
+    case OPEN_DELIM_TOKEN:
+      token_ibuf_push(&aux_stack,tok);
+      break;
+    case CLOSE_DELIM_TOKEN:
+      if (tok.close == LM_DEF_CLOSE){ /*the open para's were a lambda declaration*/
+          
+      } else {
+        while(!ibuf_empty(aux_stack) &&
+              ibuf_get(aux_stack).type != OPEN_DELIM_TOKEN)
+          token_ibuf_push(&out_stack, ibuf_pop(aux_stack));
+      }
+      //assert(ibuf_get(aux_stack).type == OPEN_DELIM_TOKEN);
+      ibuf_pop(aux_stack);
+      break;
+    default: break;
     }
+  }
   while(!ibuf_empty(aux_stack))
     token_ibuf_push(&out_stack, ibuf_pop(aux_stack));
   

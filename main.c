@@ -393,10 +393,8 @@ evaluate(astate* state, const token_ibuf* expr, int len,
     if (call)                                \
       goto_err(tok.n, MEMORY_ERROR,          \
                "Memory Error in Parsing");
-#define push_stackp(p, stack)
-  _mtok(token_ibuf_push(stack,p))
-#define push_stack(p, stack)
-  _mtok(token_ibuf_push(&stack,p))
+#define push_stack(p, stackp)
+  _mtok(token_ibuf_push(stackp,p))
 
 /*parsing*/
 tokenize(char *line, token_ibuf* out, mem_guard _g){
@@ -586,6 +584,56 @@ tokenize(char *line, token_ibuf* out, mem_guard _g){
 #undef push_out
 }
 
+torpn(token_ibuf* out, token_ibuf *tokens, token_ibuf* aux){
+    /*to rpn*/
+  for(i=0; i<=tok_stack.pos; ++i) {
+    token tok = ibuf_geti(*tokens,i);
+    int len;
+    switch(tok.type){
+    case VALUE_TOKEN:
+      token_ibuf_push(out_stack, tok);
+    case ID_TOKEN:
+      ibuf_geti(*tokens,i)=null_token;
+      break;
+    case PREFIX_OP_TOKEN:
+    case OP_TOKEN:
+      /*peek top of stack*/
+      if (!ibuf_empty(aux_stack) &&
+          precedence(ibuf_get(aux_stack)) >= precedence(tok)) {
+        token_ibuf_push(&out_stack,ibuf_get(aux_stack));
+        ibuf_get(aux_stack) = tok;/*swap*/
+      } else {
+        token_ibuf_push(&aux_stack,tok);
+      }
+      break;
+    case OPEN_DELIM_TOKEN:
+      token_ibuf_push(&aux_stack,tok);
+      break;
+    case CLOSE_DELIM_TOKEN:
+      if (tok.close == LM_DEF_CLOSE){ /*the open para's were a lambda declaration*/
+          
+      } else {
+        while(!ibuf_empty(aux_stack) &&
+              ibuf_get(aux_stack).type != OPEN_DELIM_TOKEN)
+          token_ibuf_push(&out_stack, ibuf_pop(aux_stack));
+        
+      }
+      //assert(ibuf_get(aux_stack).type == OPEN_DELIM_TOKEN);
+      ibuf_pop(aux_stack);
+      break;
+    case OPEN_QUOTE_TOKEN:
+      for(++i;tok_stack.data[i] != CLOSE_QUOTE_TOKEN; ++i) {
+        tokeb_ibuf_push(out, ibuf_geti(*tokens,i));
+        if (geti(*tokens,i).type == ID_TOKEN)
+          geti(*tokens,i) = null_token;
+      }
+      ++i;
+    default: break;
+    }
+  }
+  while(!ibuf_empty(aux_stack))
+    token_ibuf_push(&out_stack, ibuf_pop(aux_stack));
+}
 
 aifaleene(char *line, astate* state)
 {
@@ -612,44 +660,7 @@ aifaleene(char *line, astate* state)
   
   _a(token_ibuf_mk_sz(&aux_stack,tok_stack.sz));
   _a(token_ibuf_mk_sz(&out_stack,tok_stack.sz));
-  /*to rpn*/
-  for(i=0; i<=tok_stack.pos; ++i) {
-    token tok = ibuf_geti(tok_stack,i);
-    switch(tok.type){
-    case ID_TOKEN:
-    case VALUE_TOKEN:
-      token_ibuf_push(&out_stack, tok); break;
-    case PREFIX_OP_TOKEN:
-    case OP_TOKEN:
-      /*peek top of stack*/
-      if (!ibuf_empty(aux_stack) &&
-          precedence(ibuf_get(aux_stack)) >= precedence(tok)) {
-        token_ibuf_push(&out_stack,ibuf_get(aux_stack));
-        ibuf_get(aux_stack) = tok;/*swap*/
-      } else {
-        token_ibuf_push(&aux_stack,tok);
-      }
-      break;
-    case OPEN_DELIM_TOKEN:
-      token_ibuf_push(&aux_stack,tok);
-      break;
-    case CLOSE_DELIM_TOKEN:
-      if (tok.close == LM_DEF_CLOSE){ /*the open para's were a lambda declaration*/
-          
-      } else {
-        while(!ibuf_empty(aux_stack) &&
-              ibuf_get(aux_stack).type != OPEN_DELIM_TOKEN)
-          token_ibuf_push(&out_stack, ibuf_pop(aux_stack));
-      }
-      //assert(ibuf_get(aux_stack).type == OPEN_DELIM_TOKEN);
-      ibuf_pop(aux_stack);
-      break;
-    default: break;
-    }
-  }
-  while(!ibuf_empty(aux_stack))
-    token_ibuf_push(&out_stack, ibuf_pop(aux_stack));
-  
+  torpn(&out_stack, &tok_stack, &aux_stack);
   _f(token_ibuf_free(&tok_stack),0);
   verbose(*state) && dump_stack(&out_stack, ",");
   /*evaluate*/

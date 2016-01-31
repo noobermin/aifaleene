@@ -7,7 +7,6 @@ token_buf_clean(token_buf* in) {
     token_clean(in->data[i]);
 }
 
-
 /* var */
 
 var_list*

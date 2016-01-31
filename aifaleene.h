@@ -185,6 +185,12 @@ static inline void
 token_ibuf_clean(token_ibuf* in){
   token_buf_clean(&in->buf);
 }
+static inline
+token_ibuf_pushmove(token_ibuf* to,
+                    token_ibuf* from,
+                    size_t i){
+  if (token_geti(*from,i).type == ID_TOKEN);
+}
 
 static inline void
 token_ibuf_nullify(token_ibuf* in){
@@ -248,7 +254,6 @@ var_ch(var* in, var_type type) {
   return 0;
 }
 #define var_clean(in) var_ch(in, INVALID_VAR);
-
 
 list_dec(var);
 hash_dec(var);

@@ -20,8 +20,7 @@
  * 
  * These types currently only have context in this file.
  */
-typedef struct _mem_guard
-{
+typedef struct _mem_guard{
   int cur;
   large_mask alloc;
   /* These are done purposefully so that
@@ -46,17 +45,21 @@ typedef struct _mem_guard
 #define gotoerr_g(_g, pos, err, vl...) gotoerr_gl(_g,end,pos,err,vl)
 #define gotoerr(pos, err, vl...) gotoerr_g(_g,pos,err,vl)
 /*allocation exception wrapper*/
-#define _a_gls(_g,LABEL,errstr,call) {          \
+#define _a_ac_gls(_g,LABEL,errstr,call) {          \
     if (call)                                   \
       gotoerr_gl(_g,LABEL, 0,                   \
                  MEMORY_ERROR, errstr);         \
     _g.alloc|=1<<(_g.cur++);                    \  
   }
-#define _a_gl(_g,LABEL,call)                    \
+#define _a_ac_gl(_g,LABEL,call)                    \
   _a_gls(_g,LABEL, "Allocation Error",call)
-#define _a_g(_g,call) _a_gl(_g,end,call)
-#define _a(call) _a_g(_g,call)
-
+#define _a_ac_g(_g,call) _a_gl(_g,end,call)
+#define _a_ac(call) _a_g(_g,call)
+#define _a(call) {
+  if (call)
+    gotoerr_gl(_g,end,0,MEMORY_ERROR, "Allocation Error");
+}
+  
 const char *error_names[] = {
   "General Error",
   "Memory Error",
@@ -349,9 +352,11 @@ value_from_id(const char *id,
       {gotoerr(tok.real_pos, NOTFOUND_ERROR,"token \"%s\" not found.",tok.id);}
 
 evaluate(astate* state, const token_ibuf* expr, int len,
-	 token_ibuf* aux_stack,
-	 mem_guard _g) {
-
+         token_ibuf* aux_stack,
+         mem_guard _g) {
+  char_ibuf scope;
+  _a(char_ibuf_mk(&scope));
+  char_buf_set(&scope.buf,'\0');
   for(int i=0; i<=len; ++i) {
     token cur = ibuf_geti(*expr,i);
     if (cur.type == VALUE_TOKEN || cur.type == ID_TOKEN) {
@@ -362,18 +367,32 @@ evaluate(astate* state, const token_ibuf* expr, int len,
 	  if (token_ibuf_popv(aux_stack,2,&r,&l))
 	    gotoerr(cur.real_pos, SYNTAX_ERROR, "incorrect number of arguments.");
 	  if (cur.op == ASSIGN_OP) {
-        var id;
+        var out;
         if (l.type != ID_TOKEN)
           gotoerr(l.real_pos, SYNTAX_ERROR, "cannot assign to non-var");
-        tok_to_val(r);
-        id.v = v = r.v; id.type = VALUE_ID; strncpy(id.name, l.id, ID_LEN);
-        if ((st=var_setdefault(&id, state->table)))
-          gotoerr(cur.real_pos, st, "failed in assignment.");
+        /*resolve name in scope*/
+        out.name = l.id;/*the stack loses its ownership*/
+        _a(_str_precat(&out.name, &scope));
+        if (r.type == VALUE_ID) {
+          out.type = l.type, out.v = r.v;
+          _a(var_setdefault(&var, state->table));
+        } else { // Time to evaluate quotes and figure out function application
+          if (l=var_find(_str(l.id), state->table)) {
+            if (r.type == VALUE_ID) {
+              var* vr=&l->data;
+              var_ch(vr, VALUE_VAR);
+              vr.v
+                id.v = v = r.v; id.type = VALUE_ID; strncpy(id.name, l.id, ID_LEN);
+            }
+          }
+        }
+          if (var_setdefault(&id, state->table))
+
       }
 	  else { /*normal operator*/
         tok_to_val(l);
         tok_to_val(r);
-        if ((st=operate(l.v,r.v,cur.op,&v)))
+        if (st=operate(l.v,r.v,cur.op,&v))
           gotoerr(cur.real_pos, st, "failed in operation %s", op_strs[cur.op]);
       }
 	  token_ibuf_push(aux_stack,
@@ -530,7 +549,7 @@ tokenize(char *line, token_ibuf* out, mem_guard _g){
     scan_table(pref_op_strs, PREF);
     tok.prefix_op = (prefix_op_type)i;
     expected = VALUE_TOKEN | ID_TOKEN
-      | PREFIX_OP_TOKEN | OPEN_DELIM_TOKEN ;
+      | PREFIX_OP_TOKEN | OPEN_DELIM_TOKEN ;x
   } else if (type == OPEN_DELIM_TOKEN) {
     scan_table(open_strs,OPEN);
     tok.open = (open_delim_type)i;
@@ -652,14 +671,14 @@ aifaleene(char *line, astate* state)
   token res; var tmp;
   char errstr[max(len+1,64)];
 
-  _a(token_ibuf_mk(&tok_stack));
+  _a_ac(token_ibuf_mk(&tok_stack));
   
   if (! tokenize(line, &out_stack, len,  _g) ) goto end;
   
   verbose(*state) && dump_stack(&tok_stack, "");
   
-  _a(token_ibuf_mk_sz(&aux_stack,tok_stack.sz));
-  _a(token_ibuf_mk_sz(&out_stack,tok_stack.sz));
+  _a_ac(token_ibuf_mk_sz(&aux_stack,tok_stack.sz));
+  _a_ac(token_ibuf_mk_sz(&out_stack,tok_stack.sz));
   torpn(&out_stack, &tok_stack, &aux_stack);
   _f(token_ibuf_free(&tok_stack),0);
   verbose(*state) && dump_stack(&out_stack, ",");

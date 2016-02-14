@@ -110,10 +110,12 @@ typedef struct _value{
 #include "list.h"
 #include "hash.h"
 
-#define ID_LEN 64
+/*#define ID_LEN 64
 #define LONG_ID_LEN 256
 typedef char idname[ID_LEN];
-typedef char longidname[LONG_ID_LEN];
+typedef char longidname[LONG_ID_LEN];*/
+
+ibuf_dec(char);
 
 typedef struct _token{
   token_type type;
@@ -254,7 +256,8 @@ var_ch(var* in, var_type type) {
   return 0;
 }
 #define var_clean(in) var_ch(in, INVALID_VAR);
-
+#define var_from_val(val) (                     \
+                           (var){.type=})             \
 list_dec(var);
 hash_dec(var);
 #undef INLINETYPES

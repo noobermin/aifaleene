@@ -12,8 +12,18 @@ token_buf_clean(token_buf* in) {
 var_list*
 var_list_find(const char* id,var_list* l) {
   for(;l!=NULL; l=l->next)
-    if ( !strcmp(l->data.name,id) ) break;
+    if (!strcmp(l->data.name,id) ) break;
   return l;
+}
+
+var_list*
+var_find(const char* id, var_hash_table table){
+  int h = hash(in->name);
+  var_list *l;
+  if (table[h] &&
+      (l=var_list_find(in->name,table[h])))
+    return l;
+  return NULL;
 }
 
 var_get(const char* id,
@@ -27,18 +37,18 @@ var_get(const char* id,
   return 0;
 }
 
+/* Anything passed in is swallowed, it is no
+ * longer owned by the caller. */
 var_setdefault(const var* in,
                var_hash_table table) {
-  int h = hash(in->name);
-  
+  int h = hash(_str(in->name));
   var_list *l;
-  if (table[h]
-      && (l=var_list_find(in->name,table[h])))
-    { l->data = *in; return 0;} 
-  else
-    { return var_list_pushp(table+h,in) ? MEMORY_ERROR : 0; }
+  if (l=var_find(in, table)) {
+    return (!var_ch(l->data, in->type)) ? MEMORY_ERROR :
+      (l->data = *in), 0;
+  } else {
+    return var_list_pushp(table+h,in) ? MEMORY_ERROR : 0; }
 }
-		      
 
 var_add(var* in,
         var_hash_table table) {
